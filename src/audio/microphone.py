@@ -17,7 +17,7 @@ import numpy as np
 
 try:
     import sounddevice as sd
-except ImportError:
+except (ImportError, OSError):
     sd = None  # Fallback unavailable
 
 logger = logging.getLogger(__name__)
