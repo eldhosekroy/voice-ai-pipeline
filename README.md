@@ -2,27 +2,30 @@
 
 A modular, real-time voice AI pipeline built in Python 3.11+.
 
-## Target Pipeline Architecture
+## Pipeline Architecture
 
 ```text
-Microphone Audio Input (STEP 2 - Active)
+Microphone Audio Input (`src/audio/microphone.py`)
         ↓
-Silero VAD (Voice Activity Detection)
-        ↓
-Whisper STT (Speech-to-Text)
-        ↓
-Qwen via Ollama (Local LLM Response)
-        ↓
-Kokoro TTS (Text-to-Speech)
-        ↓
-Speaker Audio Output
+Silero VAD (`src/vad/silero_vad.py`)              - Voice Activity Detection (ONNX Runtime)
+        ↓  (Speech segment numpy array)
+Whisper STT (`src/stt/whisper.py`)                - Speech-to-Text (faster-whisper)
+        ↓  (Transcribed text string)
+Qwen via Ollama (`src/llm/qwen.py`)               - Local LLM Response Generation
+        ↓  (AI response text string)
+Kokoro TTS (`src/tts/kokoro.py`)                  - Text-to-Speech Audio Synthesis
+        ↓  (Synthesized audio array)
+Speaker Audio Output (`src/audio/output.py`)     - System Speaker Playback
 ```
+
+---
 
 ## Features & Principles
 
-- **Modular Design**: Every AI component (Audio Input, VAD, STT, LLM, TTS) is isolated behind clean Abstract Base Class (`ABC`) interfaces.
-- **Hardware Agnostic**: Device selection (CPU / GPU) and compute precision are configured via environment variables for easy handoff to team testing.
-- **Local Execution**: LLM runs locally through Ollama (Qwen model).
+- **Modular Architecture**: Every AI component (Mic, VAD, STT, LLM, TTS, Speaker) is decoupled behind abstract interface classes (`ABC`) and wired via dependency injection inside `VoicePipeline`.
+- **CPU Default / GPU Configurable**: Default settings run efficiently on CPU without requiring CUDA or heavy GPU setup. Device configuration can be switched to GPU via environment variables (`WHISPER_DEVICE=cuda`, `VAD_DEVICE=cuda`).
+- **Local Ollama Integration**: Communicates with local Ollama service for Qwen LLM inferencing (`http://localhost:11434`).
+- **Independent Component Testing**: Each module includes isolated unit test coverage under `tests/`.
 
 ---
 
@@ -35,30 +38,36 @@ voice-ai-pipeline/
 │   ├── __init__.py
 │   ├── audio/
 │   │   ├── __init__.py
-│   │   └── microphone.py     # BaseAudioInput interface & Microphone capture implementation
+│   │   ├── microphone.py     # BaseAudioInput interface & Microphone capture implementation
+│   │   └── output.py         # BaseAudioOutput interface & Speaker playback implementation
 │   │
 │   ├── pipeline/
 │   │   ├── __init__.py
-│   │   └── pipeline.py       # Pipeline orchestrator
+│   │   └── pipeline.py       # VoicePipeline orchestrator
 │   │
 │   ├── vad/
 │   │   ├── __init__.py
-│   │   └── silero_vad.py     # BaseVAD & SileroVAD placeholder
+│   │   └── silero_vad.py     # BaseVAD interface & Silero VAD (ONNX Runtime)
 │   │
 │   ├── stt/
 │   │   ├── __init__.py
-│   │   └── whisper.py        # BaseSTT & WhisperSTT placeholder
+│   │   └── whisper.py        # BaseSTT interface & Whisper STT (faster-whisper)
 │   │
 │   ├── llm/
 │   │   ├── __init__.py
-│   │   └── qwen.py           # BaseLLM & QwenLLM placeholder
+│   │   └── qwen.py           # BaseLLM interface & Qwen via Ollama client
 │   │
 │   └── tts/
 │       ├── __init__.py
-│       └── kokoro.py         # BaseTTS & KokoroTTS placeholder
+│       └── kokoro.py         # BaseTTS interface & Kokoro / pyttsx3 / gTTS synthesis
 │
 ├── tests/
-│   └── __init__.py
+│   ├── __init__.py
+│   ├── test_audio.py
+│   ├── test_vad.py
+│   ├── test_stt.py
+│   ├── test_llm.py
+│   └── test_tts.py
 │
 ├── config/
 │   ├── __init__.py
@@ -74,67 +83,70 @@ voice-ai-pipeline/
 
 ## Configuration Settings
 
-Settings are defined in `config/config.py` and can be overridden via environment variables:
+All model names, devices, and thresholds are configurable via environment variables or `config/config.py`:
 
 | Environment Variable | Default Value | Description |
 |----------------------|---------------|-------------|
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama service endpoint |
-| `OLLAMA_MODEL` | `qwen2.5` | Qwen LLM model tag |
-| `WHISPER_MODEL` | `base` | Whisper model size (`tiny`, `base`, `small`, etc.) |
-| `WHISPER_DEVICE` | `cpu` | Device hardware (`cpu` or `cuda`) |
-| `WHISPER_COMPUTE_TYPE` | `int8` | Precision (`int8`, `float16`, `float32`) |
-| `KOKORO_VOICE` | `af_heart` | Voice profile for Kokoro TTS |
-| `SAMPLE_RATE` | `16000` | Audio sampling rate in Hz |
-| `VAD_THRESHOLD` | `0.5` | Silero VAD speech probability threshold |
+| `VAD_DEVICE` | `cpu` | Hardware device for Silero VAD (`cpu` or `cuda`) |
+| `VAD_THRESHOLD` | `0.5` | Speech detection confidence threshold |
 | `VAD_MIN_SPEECH_DURATION` | `0.25` | Min speech segment duration (seconds) |
-| `VAD_MIN_SILENCE_DURATION` | `0.5` | Min silence duration to end segment (seconds) |
+| `VAD_MIN_SILENCE_DURATION` | `0.5` | Min silence duration to trigger speech end (seconds) |
+| `WHISPER_MODEL` | `base` | Whisper model size (`tiny`, `base`, `small`, `medium`) |
+| `WHISPER_DEVICE` | `cpu` | Hardware device for Whisper STT (`cpu` or `cuda`) |
+| `WHISPER_COMPUTE_TYPE` | `int8` | Inference quantization (`int8`, `float16`, `float32`) |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Local Ollama REST API endpoint |
+| `OLLAMA_MODEL` | `qwen2.5` | Qwen LLM model tag |
+| `KOKORO_VOICE` | `af_heart` | Voice profile for TTS |
+| `KOKORO_DEVICE` | `cpu` | Hardware device for TTS synthesis (`cpu` or `cuda`) |
+| `SAMPLE_RATE` | `16000` | Audio sampling rate in Hz |
 
 ---
 
-## Setup & Running (STEP 2)
+## Model & Ollama Setup Guide
 
-### 1. Create Virtual Environment
+### 1. Ollama & Qwen Setup
+
+1. Install [Ollama](https://ollama.com).
+2. Start the Ollama service:
+   ```bash
+   ollama serve
+   ```
+3. Pull the Qwen model:
+   ```bash
+   ollama pull qwen2.5
+   ```
+
+### 2. Silero VAD & Whisper Models
+
+- **Silero VAD**: Automatically downloads `silero_vad.onnx` to `~/.cache/silero_vad/` on first run.
+- **Whisper STT**: Automatically downloads faster-whisper model weights (e.g. `base` or `tiny`) via Hugging Face Hub on first run.
+
+---
+
+## Quickstart & Execution
+
+### 1. Install Dependencies
 
 ```bash
-python -m venv .venv
-# On Windows PowerShell:
-.\.venv\Scripts\Activate.ps1
-# On Linux / macOS:
-source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-### 2. Install STEP 2 Dependencies
+### 2. Run Unit Tests
 
 ```bash
-pip install sounddevice numpy
+python -m unittest discover -s tests
 ```
 
-### 3. Run the Application & Microphone Test
+### 3. Run the Voice Pipeline
 
 ```bash
 python main.py
 ```
 
-Expected log output demonstrating microphone stream initialization, audio chunk capture, and clean shutdown:
-```text
-[INFO] [AUDIO] Starting microphone stream (sample_rate=16000, chunk_size=512, channels=1)...
-[INFO] [AUDIO] Microphone stream started successfully.
-[INFO] [AUDIO] Capture test complete: Read 63 chunks (32256 total samples).
-[INFO] [AUDIO] Stopping microphone stream...
-[INFO] [AUDIO] Microphone stream stopped.
-```
-
 ---
 
-## Development Roadmap
+## Troubleshooting
 
-- [x] **STEP 1**: Project structure, abstract interfaces, configuration & stubs
-- [x] **STEP 2**: Microphone audio capture (`src/audio/microphone.py`) & buffer management
-- [ ] **STEP 3**: Silero VAD integration & speech segment extraction
-- [ ] **STEP 4**: Whisper STT integration & transcription
-- [ ] **STEP 5**: Ollama + Qwen LLM integration
-- [ ] **STEP 6**: Kokoro TTS audio synthesis
-- [ ] **STEP 7**: Speaker audio playback
-- [ ] **STEP 8**: Connect components into `VoicePipeline` loop
-- [ ] **STEP 9**: Logging & graceful error handling
-- [ ] **STEP 10**: Testing & complete end-to-end verification
+- **Ollama Offline**: If you see `[LLM] Could not connect to Ollama service`, ensure `ollama serve` is running in another terminal window.
+- **Microphone Error**: Ensure your microphone is connected and non-exclusive audio access is enabled.
+- **Whisper Memory Error**: If running on CPU with limited RAM, set `WHISPER_MODEL=tiny` in environment variables.

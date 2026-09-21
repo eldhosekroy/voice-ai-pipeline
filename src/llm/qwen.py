@@ -1,9 +1,11 @@
 """
-Language Model (LLM) component interface and Ollama Qwen implementation.
+Language Model (LLM) component using local Ollama REST API for Qwen.
+Communicates with local Ollama service endpoint.
 """
 
 from abc import ABC, abstractmethod
 import logging
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -14,39 +16,107 @@ class BaseLLM(ABC):
     @abstractmethod
     def generate_response(self, prompt: str) -> str:
         """
-        Generate a text response given a prompt.
+        Generate text response for a given prompt string.
 
         :param prompt: User prompt text
-        :return: Generated response text
+        :return: Generated text response
         """
         pass
 
 
 class QwenLLM(BaseLLM):
-    """Qwen LLM via Ollama implementation stub."""
+    """
+    Qwen LLM client communicating with Ollama REST API.
+    """
 
     def __init__(
         self,
         base_url: str = "http://localhost:11434",
         model_name: str = "qwen2.5",
+        timeout: float = 30.0,
     ) -> None:
-        self.base_url = base_url
+        self.base_url = base_url.rstrip("/")
         self.model_name = model_name
+        self.timeout = timeout
 
-        # TODO: Initialize Ollama API client connection
-        logger.info(
-            "[LLM] Initialized QwenLLM stub (model=%s, url=%s)",
-            self.model_name,
-            self.base_url,
-        )
+        self.is_available: bool = self.check_ollama_status()
+
+    def check_ollama_status(self) -> bool:
+        """
+        Check if Ollama service is reachable and log status.
+        """
+        try:
+            url = f"{self.base_url}/api/tags"
+            response = requests.get(url, timeout=3.0)
+            if response.status_code == 200:
+                models_info = response.json().get("models", [])
+                installed_models = [m.get("name", "").split(":")[0] for m in models_info]
+                logger.info(
+                    "[LLM] Connected to Ollama at %s. Installed models: %s",
+                    self.base_url,
+                    installed_models,
+                )
+
+                # Verify configured model is present
+                model_base = self.model_name.split(":")[0]
+                if not any(model_base in m for m in installed_models):
+                    logger.warning(
+                        "[LLM] Model '%s' was not found in local Ollama instance. Run `ollama pull %s` in terminal.",
+                        self.model_name,
+                        self.model_name,
+                    )
+                return True
+            else:
+                logger.warning(
+                    "[LLM] Ollama returned status code %d at %s.",
+                    response.status_code,
+                    self.base_url,
+                )
+                return False
+        except requests.exceptions.ConnectionError:
+            logger.warning(
+                "[LLM] Could not connect to Ollama service at %s. Please ensure Ollama is installed and running (`ollama serve`).",
+                self.base_url,
+            )
+            return False
+        except Exception as e:
+            logger.error("[LLM] Ollama health check error: %s", e)
+            return False
 
     def generate_response(self, prompt: str) -> str:
         """
-        Send prompt to Qwen running locally via Ollama and return text response.
+        Send text prompt to Qwen via Ollama REST API and return text response.
         """
-        # TODO: Implement Ollama API call with Qwen model
-        # 1. Prepare request payload
-        # 2. Post request to Ollama endpoint
-        # 3. Parse and return text response
-        logger.info("[LLM] Sending request to Qwen...")
-        return ""
+        if not prompt or not prompt.strip():
+            return ""
+
+        logger.info("[LLM] Sending text to Qwen...")
+
+        url = f"{self.base_url}/api/generate"
+        payload = {
+            "model": self.model_name,
+            "prompt": prompt,
+            "stream": False,
+        }
+
+        try:
+            response = requests.post(url, json=payload, timeout=self.timeout)
+            if response.status_code == 200:
+                data = response.json()
+                text_response = data.get("response", "").strip()
+                logger.info("[LLM] Response received: %s", text_response)
+                return text_response
+            else:
+                logger.error(
+                    "[LLM] Ollama request failed with status code %d: %s",
+                    response.status_code,
+                    response.text,
+                )
+                return f"[Ollama Error: HTTP {response.status_code}]"
+        except requests.exceptions.ConnectionError:
+            error_msg = f"[Ollama Service Offline] Could not reach {self.base_url}. Run `ollama serve` and `ollama pull {self.model_name}`."
+            logger.error("[LLM] %s", error_msg)
+            return error_msg
+        except Exception as e:
+            logger.error("[LLM] Error generating Qwen response: %s", e)
+            return f"[LLM Error: {e}]"
