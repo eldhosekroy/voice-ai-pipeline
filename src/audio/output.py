@@ -17,9 +17,12 @@ import numpy as np
 
 try:
     import sounddevice as sd
-    import soundfile as sf
-except ImportError:
+except (ImportError, OSError):
     sd = None
+
+try:
+    import soundfile as sf
+except (ImportError, OSError):
     sf = None
 
 logger = logging.getLogger(__name__)

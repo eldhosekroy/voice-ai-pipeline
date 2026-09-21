@@ -2,7 +2,6 @@ import argparse
 import logging
 import sys
 from config.config import get_config
-from src.pipeline.pipeline import VoicePipeline
 
 # Configure logging format and level
 logging.basicConfig(
@@ -83,6 +82,8 @@ def main() -> None:
     logger.info("  VAD_THRESHOLD: %.2f", config.vad_threshold)
 
     # Initialize modular voice pipeline
+    from src.pipeline.pipeline import VoicePipeline
+
     pipeline = VoicePipeline(config=config)
 
     # Execute continuous real-time voice pipeline
