@@ -6,6 +6,13 @@ Loads settings from environment variables with sensible defaults.
 import os
 from dataclasses import dataclass
 
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
+
 
 @dataclass
 class PipelineConfig:

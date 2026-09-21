@@ -97,6 +97,7 @@ class QwenLLM(BaseLLM):
             "model": self.model_name,
             "prompt": prompt,
             "stream": False,
+            "keep_alive": -1,  # Pin model in VRAM indefinitely (no cold-load lag)
         }
 
         try:
