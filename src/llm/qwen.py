@@ -50,16 +50,22 @@ class QwenLLM(BaseLLM):
             response = requests.get(url, timeout=3.0)
             if response.status_code == 200:
                 models_info = response.json().get("models", [])
-                installed_models = [m.get("name", "").split(":")[0] for m in models_info]
+                installed_names = [m.get("name", "") for m in models_info]
+                installed_models = [name.split(":")[0] for name in installed_names]
                 logger.info(
                     "[LLM] Connected to Ollama at %s. Installed models: %s",
                     self.base_url,
-                    installed_models,
+                    installed_names,
                 )
 
-                # Verify configured model is present
+                # Verify configured model is present (exact match, base name match, or tag prefix)
                 model_base = self.model_name.split(":")[0]
-                if not any(model_base in m for m in installed_models):
+                is_present = (
+                    self.model_name in installed_names
+                    or any(model_base == m for m in installed_models)
+                    or any(name.startswith(self.model_name) or self.model_name.startswith(name) for name in installed_names)
+                )
+                if not is_present:
                     logger.warning(
                         "[LLM] Model '%s' was not found in local Ollama instance. Run `ollama pull %s` in terminal.",
                         self.model_name,

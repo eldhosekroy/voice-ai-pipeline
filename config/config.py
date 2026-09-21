@@ -31,7 +31,7 @@ class PipelineConfig:
 
     # LLM (Ollama / Qwen) Settings
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen2.5")
+    ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
 
     # TTS (Kokoro) Settings
     kokoro_voice: str = os.getenv("KOKORO_VOICE", "af_heart")
