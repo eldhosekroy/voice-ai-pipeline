@@ -22,7 +22,16 @@ class RemotePipelineClient:
         server_url: str = "http://localhost:8000",
         timeout: float = 60.0,
     ) -> None:
-        self.server_url = server_url.rstrip("/")
+        url = server_url.strip().rstrip("/").rstrip(".")
+        if not url.startswith("http://") and not url.startswith("https://"):
+            url = f"http://{url}"
+
+        # If user provided IP or hostname without a port (e.g. http://100.111.239.44), default to 8000
+        parsed = urllib.parse.urlparse(url)
+        if not parsed.port:
+            url = f"{url}:8000"
+
+        self.server_url = url.rstrip("/")
         self.timeout = timeout
         self.is_connected: bool = False
 
@@ -134,10 +143,11 @@ class RemotePipelineClient:
         except requests.exceptions.Timeout:
             logger.error("[RemoteClient] Request to %s timed out after %.1fs.", self.server_url, self.timeout)
             return None, sample_rate, "", ""
-        except requests.exceptions.ConnectionError:
+        except requests.exceptions.ConnectionError as err:
             logger.error(
-                "[RemoteClient] Lost connection to remote server at %s. Check Tailscale status.",
+                "[RemoteClient] Lost connection to remote server at %s. (Detail: %s). Check if server is running and port is open.",
                 self.server_url,
+                err,
             )
             return None, sample_rate, "", ""
         except Exception as e:
