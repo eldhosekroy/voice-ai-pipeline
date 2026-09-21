@@ -32,7 +32,7 @@ class QwenLLM(BaseLLM):
     def __init__(
         self,
         base_url: str = "http://localhost:11434",
-        model_name: str = "qwen2.5",
+        model_name: str = "qwen2.5-coder:7b",
         timeout: float = 30.0,
     ) -> None:
         self.base_url = base_url.rstrip("/")
