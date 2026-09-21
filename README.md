@@ -172,3 +172,9 @@ python main.py --mode standalone
    - Your laptop will now only capture microphone audio, detect speech using Silero VAD, stream the audio over Tailscale, and play the AI voice through your laptop's speakers!
 
 ---
+
+## Troubleshooting
+
+- **Ollama Offline**: If you see `[LLM] Could not connect to Ollama service`, ensure `ollama serve` is running in another terminal window.
+- **Microphone Error**: Ensure your microphone is connected and non-exclusive audio access is enabled.
+- **Whisper Memory Error**: If running on CPU with limited RAM, set `WHISPER_MODEL=tiny` in environment variables.
