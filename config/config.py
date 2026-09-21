@@ -40,6 +40,16 @@ class PipelineConfig:
     # Audio Settings
     sample_rate: int = int(os.getenv("SAMPLE_RATE", "16000"))
 
+    # Pipeline Mode: "standalone" (all local), "client" (mic/vad on laptop), "server" (remote processing)
+    pipeline_mode: str = os.getenv("PIPELINE_MODE", "standalone")
+
+    # Remote Server / Tailscale Settings
+    # Example: http://100.64.0.1:8000 or http://my-desktop.tailnet.ts.net:8000
+    remote_server_url: str = os.getenv("REMOTE_SERVER_URL", "http://localhost:8000")
+    server_host: str = os.getenv("SERVER_HOST", "0.0.0.0")
+    server_port: int = int(os.getenv("SERVER_PORT", "8000"))
+    remote_request_timeout: float = float(os.getenv("REMOTE_REQUEST_TIMEOUT", "60.0"))
+
 
 def get_config() -> PipelineConfig:
     """Helper function to return a fresh PipelineConfig instance."""

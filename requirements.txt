@@ -19,3 +19,7 @@ python-dotenv>=1.0.0
 # Text-to-Speech (Kokoro TTS)
 kokoro-onnx>=0.6.1
 pyttsx3>=2.90
+
+# Remote Server / Tailscale Client API
+fastapi>=0.110.0
+uvicorn>=0.28.0

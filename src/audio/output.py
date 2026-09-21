@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 import io
 import logging
 import os
+import shutil
 import struct
 import subprocess
 import tempfile
@@ -87,11 +88,12 @@ class PipeWireSpeaker(BaseAudioOutput):
             logger.warning("[AUDIO] Received empty audio buffer for playback.")
             return
 
-        uid = os.getuid()
         env = os.environ.copy()
-        env.setdefault("PULSE_RUNTIME_PATH", f"/run/user/{uid}/pulse")
-        env.setdefault("PIPEWIRE_RUNTIME_DIR", f"/run/user/{uid}")
-        env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
+        if hasattr(os, "getuid"):
+            uid = os.getuid()
+            env.setdefault("PULSE_RUNTIME_PATH", f"/run/user/{uid}/pulse")
+            env.setdefault("PIPEWIRE_RUNTIME_DIR", f"/run/user/{uid}")
+            env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
 
         cmd = [
             "paplay",
@@ -149,7 +151,7 @@ class Speaker(BaseAudioOutput):
     def _detect_backend(self) -> BaseAudioOutput:
         """Prefer PipeWire (paplay) over sounddevice/PortAudio."""
         # Check if paplay is available (PipeWire/PulseAudio compat)
-        if subprocess.run(["which", "paplay"], capture_output=True).returncode == 0:
+        if shutil.which("paplay") is not None:
             logger.info("[AUDIO] Using PipeWire (paplay) output backend.")
             return PipeWireSpeaker(device=self.device if isinstance(self.device, str) else None)
 

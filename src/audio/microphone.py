@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 import logging
 import os
 import queue
+import shutil
 import subprocess
 import threading
 from typing import Any
@@ -106,12 +107,13 @@ class PipewireMicrophone(BaseAudioInput):
         if self.device:
             cmd.append(f"--device={self.device}")
 
-        # Inherit env and inject PipeWire/PulseAudio socket paths
-        uid = os.getuid()
+        # Inherit env and inject PipeWire/PulseAudio socket paths if on POSIX
         env = os.environ.copy()
-        env.setdefault("PULSE_RUNTIME_PATH", f"/run/user/{uid}/pulse")
-        env.setdefault("PIPEWIRE_RUNTIME_DIR", f"/run/user/{uid}")
-        env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
+        if hasattr(os, "getuid"):
+            uid = os.getuid()
+            env.setdefault("PULSE_RUNTIME_PATH", f"/run/user/{uid}/pulse")
+            env.setdefault("PIPEWIRE_RUNTIME_DIR", f"/run/user/{uid}")
+            env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
 
         logger.info("[AUDIO] Starting PipeWire mic via parec: %s", " ".join(cmd))
         try:
@@ -212,18 +214,22 @@ class Microphone(BaseAudioInput):
         self._delegate: BaseAudioInput | None = self._detect_backend()
 
     def _detect_backend(self) -> "BaseAudioInput | None":
-        """Check if sounddevice has a working input device. Return PipewireMicrophone if not."""
+        """Check if sounddevice has a working input device. Return PipewireMicrophone if not and parec is present."""
+        has_parec = shutil.which("parec") is not None
         if sd is None:
-            logger.info("[AUDIO] sounddevice unavailable. Using PipeWire (parec) backend.")
-            return PipewireMicrophone(
-                sample_rate=self.sample_rate,
-                chunk_size=self.chunk_size,
-                channels=self.channels,
-            )
+            if has_parec:
+                logger.info("[AUDIO] sounddevice unavailable. Using PipeWire (parec) backend.")
+                return PipewireMicrophone(
+                    sample_rate=self.sample_rate,
+                    chunk_size=self.chunk_size,
+                    channels=self.channels,
+                )
+            logger.warning("[AUDIO] sounddevice is not available and parec was not found.")
+            return None
         try:
             devs = sd.query_devices()
-            has_input = any(d["max_input_channels"] > 0 for d in devs)
-            if not has_input:
+            has_input = any(d.get("max_input_channels", 0) > 0 for d in devs)
+            if not has_input and has_parec:
                 logger.info(
                     "[AUDIO] No PortAudio input devices found. Using PipeWire (parec) backend."
                 )
@@ -233,12 +239,14 @@ class Microphone(BaseAudioInput):
                     channels=self.channels,
                 )
         except Exception as e:
-            logger.warning("[AUDIO] PortAudio device query failed (%s). Using PipeWire backend.", e)
-            return PipewireMicrophone(
-                sample_rate=self.sample_rate,
-                chunk_size=self.chunk_size,
-                channels=self.channels,
-            )
+            if has_parec:
+                logger.warning("[AUDIO] PortAudio device query failed (%s). Using PipeWire backend.", e)
+                return PipewireMicrophone(
+                    sample_rate=self.sample_rate,
+                    chunk_size=self.chunk_size,
+                    channels=self.channels,
+                )
+            logger.warning("[AUDIO] PortAudio device query failed: %s", e)
         return None  # PortAudio has input devices — use native sounddevice path
 
     def _audio_callback(
